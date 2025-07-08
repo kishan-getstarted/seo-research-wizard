@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 
 async function scrapeWithRetry(url: string, maxRetries: number = 3): Promise<string> {
@@ -10,9 +10,8 @@ async function scrapeWithRetry(url: string, maxRetries: number = 3): Promise<str
     let page = null;
     
     try {
-      // Launch browser with robust configuration
-      browser = await chromium.launch({
-        headless: true,
+      // Launch browser with stealth configuration
+      browser = await puppeteer.launch({  
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -20,50 +19,124 @@ async function scrapeWithRetry(url: string, maxRetries: number = 3): Promise<str
           '--disable-gpu',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
-          '--disable-extensions'
+          '--disable-extensions',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-background-networking',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-breakpad',
+          '--disable-component-extensions-with-background-pages',
+          '--disable-default-apps',
+          '--disable-hang-monitor',
+          '--disable-ipc-flooding-protection',
+          '--disable-popup-blocking',
+          '--disable-prompt-on-repost',
+          '--disable-renderer-backgrounding',
+          '--disable-sync',
+          '--force-color-profile=srgb',
+          '--metrics-recording-only',
+          '--no-first-run',
+          '--password-store=basic',
+          '--use-mock-keychain',
+          '--disable-http2',
+          '--disable-quic',
+          '--exclude-switches=enable-automation',
+          '--disable-extensions-except',
+          '--disable-plugins-discovery',
+          '--disable-component-update'
         ]
       });
 
-      const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1280, height: 720 },
-        extraHTTPHeaders: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-        }
+      page = await browser.newPage();
+
+      // Set viewport and user agent
+      await page.setViewport({ width: 1366, height: 768 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+      // Set additional headers
+      await page.setExtraHTTPHeaders({
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0'
       });
 
-      page = await context.newPage();
+      // Enhanced stealth setup
+      await page.evaluateOnNewDocument(() => {
+        // Remove webdriver property
+        delete (window as any).webdriver;
+        
+        // Override navigator properties
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+        
+        Object.defineProperty(navigator, 'language', {
+          get: function() { return 'en-US'; }
+        });
+        
+        Object.defineProperty(navigator, 'languages', {
+          get: function() { return ['en-US', 'en']; }
+        });
+        
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+        
+        Object.defineProperty(navigator, 'platform', {
+          get: () => 'Win32',
+        });
+        
+        // Override permissions
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters: any) => (
+          parameters.name === 'notifications' 
+            ? Promise.resolve({ state: Notification.permission as any })
+            : originalQuery(parameters)
+        );
+      });
 
-      // Try different wait strategies based on attempt
-      let waitStrategy: 'load' | 'domcontentloaded' | 'networkidle' = 'load';
-      let timeout = 15000; // 15 seconds
-
-      if (attempt === 1) {
-        waitStrategy = 'networkidle';
-        timeout = 30000; // 30 seconds for first attempt
-      } else if (attempt === 2) {
-        waitStrategy = 'load';
+      // Try different wait strategies and timeouts based on attempt
+      let timeout = 30000; // 30 seconds for first attempt
+      if (attempt === 2) {
         timeout = 20000; // 20 seconds for second attempt  
-      } else {
-        waitStrategy = 'domcontentloaded';
-        timeout = 10000; // 10 seconds for final attempt
+      } else if (attempt === 3) {
+        timeout = 15000; // 15 seconds for final attempt
       }
 
-      console.log(`Attempt ${attempt}: Scraping ${url} with strategy ${waitStrategy}`);
+      console.log(`Attempt ${attempt}: Scraping ${url} with timeout ${timeout}ms`);
       
+      // Add random delay to appear more human-like
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 3000 + 1000));
+      
+      // Navigate to the page
       await page.goto(url, { 
-        waitUntil: waitStrategy,
+        waitUntil: 'networkidle2',
         timeout: timeout
       });
 
-      // Wait a bit more for dynamic content
-      await page.waitForTimeout(2000);
+      // Simulate human behavior
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
       
+      // Random mouse movement
+      await page.mouse.move(Math.random() * 100 + 100, Math.random() * 100 + 100);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Random scroll
+      await page.evaluate(() => {
+        window.scrollTo(0, Math.random() * 500);
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 1000 + 500));
+      
+      // Get page content
       const content = await page.content();
       
       if (content && content.length > 100) {
