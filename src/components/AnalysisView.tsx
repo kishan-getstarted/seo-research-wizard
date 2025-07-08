@@ -63,6 +63,57 @@ export default function AnalysisView({ selectedResults, keyword, onBack }: Analy
     schema: ''
   });
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Custom entries for each section
+  const [customH1Tags, setCustomH1Tags] = useState<string[]>([]);
+  const [customKeywords, setCustomKeywords] = useState<string[]>([]);
+  const [customSchemas, setCustomSchemas] = useState<string[]>([]);
+  const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [newEntryValue, setNewEntryValue] = useState('');
+
+  // Functions for managing custom entries
+  const handleAddEntry = (section: string) => {
+    setAddingTo(section);
+    setNewEntryValue('');
+  };
+
+  const handleSaveEntry = () => {
+    if (!newEntryValue.trim() || !addingTo) return;
+
+    switch (addingTo) {
+      case 'h1':
+        setCustomH1Tags(prev => [...prev, newEntryValue.trim()]);
+        break;
+      case 'keywords':
+        setCustomKeywords(prev => [...prev, newEntryValue.trim()]);
+        break;
+      case 'schemas':
+        setCustomSchemas(prev => [...prev, newEntryValue.trim()]);
+        break;
+    }
+
+    setAddingTo(null);
+    setNewEntryValue('');
+  };
+
+  const handleCancelEntry = () => {
+    setAddingTo(null);
+    setNewEntryValue('');
+  };
+
+  const handleRemoveEntry = (section: string, index: number) => {
+    switch (section) {
+      case 'h1':
+        setCustomH1Tags(prev => prev.filter((_, i) => i !== index));
+        break;
+      case 'keywords':
+        setCustomKeywords(prev => prev.filter((_, i) => i !== index));
+        break;
+      case 'schemas':
+        setCustomSchemas(prev => prev.filter((_, i) => i !== index));
+        break;
+    }
+  };
 
   useEffect(() => {
     initializeAndAnalyze();
@@ -255,11 +306,14 @@ export default function AnalysisView({ selectedResults, keyword, onBack }: Analy
   const successfulData = analysisData.filter(data => data.status === 'success');
   
   const consolidatedData = {
-    allH1Tags: successfulData.flatMap(data => data.metadata.h1Tags),
-    allKeywords: [...new Set(successfulData.flatMap(data => 
-      data.metadata.keywords.split(',').map(k => k.trim()).filter(k => k)
-    ))],
-    allSchemas: successfulData.flatMap(data => data.schema),
+    allH1Tags: [...successfulData.flatMap(data => data.metadata.h1Tags), ...customH1Tags],
+    allKeywords: [...new Set([
+      ...successfulData.flatMap(data => 
+        data.metadata.keywords.split(',').map(k => k.trim()).filter(k => k)
+      ),
+      ...customKeywords
+    ])],
+    allSchemas: [...successfulData.flatMap(data => data.schema), ...customSchemas.map(schema => ({ '@type': schema }))],
     avgKeywordDensity: successfulData.length > 0 
       ? successfulData.reduce((sum, data) => sum + data.keywordAnalysis.density, 0) / successfulData.length 
       : 0
@@ -289,44 +343,191 @@ export default function AnalysisView({ selectedResults, keyword, onBack }: Analy
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Hash className="h-5 w-5 text-blue-600" />
-              All H1 Tags ({consolidatedData.allH1Tags.length})
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Hash className="h-5 w-5 text-blue-600" />
+                All H1 Tags ({consolidatedData.allH1Tags.length})
+              </h3>
+              <button
+                onClick={() => handleAddEntry('h1')}
+                className="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 flex items-center gap-1 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
+            
+            {addingTo === 'h1' && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                <input
+                  type="text"
+                  value={newEntryValue}
+                  onChange={(e) => setNewEntryValue(e.target.value)}
+                  placeholder="Enter H1 tag text..."
+                  className="w-full p-2 border rounded-lg mb-2"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSaveEntry()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveEntry}
+                    className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEntry}
+                    className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {consolidatedData.allH1Tags.map((h1, index) => (
-                <div key={index} className="p-2 bg-gray-50 rounded text-sm">
-                  {h1}
+                <div key={index} className="p-2 bg-gray-50 rounded text-sm flex justify-between items-center group">
+                  <span>{h1}</span>
+                  {index >= successfulData.flatMap(data => data.metadata.h1Tags).length && (
+                    <button
+                      onClick={() => handleRemoveEntry('h1', index - successfulData.flatMap(data => data.metadata.h1Tags).length)}
+                      className="text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-green-600" />
-              All Keywords ({consolidatedData.allKeywords.length})
-            </h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-green-600" />
+                All Keywords ({consolidatedData.allKeywords.length})
+              </h3>
+              <button
+                onClick={() => handleAddEntry('keywords')}
+                className="bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 flex items-center gap-1 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
+            
+            {addingTo === 'keywords' && (
+              <div className="mb-4 p-3 bg-green-50 rounded-lg">
+                <input
+                  type="text"
+                  value={newEntryValue}
+                  onChange={(e) => setNewEntryValue(e.target.value)}
+                  placeholder="Enter keyword..."
+                  className="w-full p-2 border rounded-lg mb-2"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSaveEntry()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveEntry}
+                    className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEntry}
+                    className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
-              {consolidatedData.allKeywords.map((keyword, index) => (
-                <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
-                  {keyword}
-                </span>
-              ))}
+              {consolidatedData.allKeywords.map((keyword, index) => {
+                const originalKeywords = [...new Set(successfulData.flatMap(data => 
+                  data.metadata.keywords.split(',').map(k => k.trim()).filter(k => k)
+                ))];
+                const isCustom = !originalKeywords.includes(keyword);
+                
+                return (
+                  <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm flex items-center gap-1 group">
+                    {keyword}
+                    {isCustom && (
+                      <button
+                        onClick={() => handleRemoveEntry('keywords', customKeywords.indexOf(keyword))}
+                        className="text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Code className="h-5 w-5 text-purple-600" />
-              Schema Types ({consolidatedData.allSchemas.length})
-            </h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {consolidatedData.allSchemas.map((schema, index) => (
-                <div key={index} className="p-2 bg-gray-50 rounded text-sm">
-                  {schema['@type'] || 'Unknown Schema'}
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Code className="h-5 w-5 text-purple-600" />
+                Schema Types ({consolidatedData.allSchemas.length})
+              </h3>
+              <button
+                onClick={() => handleAddEntry('schemas')}
+                className="bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 flex items-center gap-1 text-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
+            
+            {addingTo === 'schemas' && (
+              <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+                <input
+                  type="text"
+                  value={newEntryValue}
+                  onChange={(e) => setNewEntryValue(e.target.value)}
+                  placeholder="Enter schema type..."
+                  className="w-full p-2 border rounded-lg mb-2"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSaveEntry()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveEntry}
+                    className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEntry}
+                    className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
                 </div>
-              ))}
+              </div>
+            )}
+            
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {consolidatedData.allSchemas.map((schema, index) => {
+                const originalSchemas = successfulData.flatMap(data => data.schema);
+                const isCustom = index >= originalSchemas.length;
+                
+                return (
+                  <div key={index} className="p-2 bg-gray-50 rounded text-sm flex justify-between items-center group">
+                    <span>{schema['@type'] || 'Unknown Schema'}</span>
+                    {isCustom && (
+                      <button
+                        onClick={() => handleRemoveEntry('schemas', index - originalSchemas.length)}
+                        className="text-red-600 hover:text-red-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
