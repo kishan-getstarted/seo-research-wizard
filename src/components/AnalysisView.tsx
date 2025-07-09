@@ -31,10 +31,10 @@ interface AnalysisData {
     keywords: string;
     h1Tags: string[];
     h2Tags: string[];
-    openGraph: any;
-    twitter: any;
+    openGraph: Record<string, unknown>;
+    twitter: Record<string, unknown>;
   };
-  schema: any[];
+  schema: Record<string, unknown>[];
   keywordAnalysis: {
     keyword: string;
     count: number;
@@ -46,13 +46,27 @@ interface AnalysisData {
   error?: string;
 }
 
+interface SEMrushData {
+  keyword: string;
+  country: string;
+  search_volume: number;
+  keyword_difficulty: number;
+  intent: string[];
+  cpc: number;
+  global_volume_data: Array<{
+    country: string;
+    search_volume: number;
+  }>;
+}
+
 interface AnalysisViewProps {
   selectedResults: SearchResult[];
   keyword: string;
   onBack: () => void;
+  semrushData?: SEMrushData | null;
 }
 
-export default function AnalysisView({ selectedResults, keyword, onBack }: AnalysisViewProps) {
+export default function AnalysisView({ selectedResults, keyword, onBack, semrushData }: AnalysisViewProps) {
   const [analysisData, setAnalysisData] = useState<AnalysisData[]>([]);
   const [overallLoading, setOverallLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
@@ -681,10 +695,65 @@ export default function AnalysisView({ selectedResults, keyword, onBack }: Analy
                 </button>
               );
             })}
+            {semrushData && (
+              <button
+                onClick={() => setActiveTab(analysisData.length)}
+                className={`px-4 py-3 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === analysisData.length
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <span>📊</span>
+                <span>SEMrush Data</span>
+              </button>
+            )}
           </div>
         </div>
 
         <div className="p-6">
+          {activeTab === analysisData.length && semrushData && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-semibold mb-2">SEMrush Keyword Analysis</h3>
+                <p className="text-gray-600 mb-4">Keyword: &quot;{semrushData.keyword}&quot; in {semrushData.country.toUpperCase()}</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{semrushData.search_volume?.toLocaleString() || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">Monthly Search Volume</div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">{semrushData.keyword_difficulty || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">Keyword Difficulty</div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">${semrushData.cpc?.toFixed(2) || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">Cost Per Click</div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="text-lg font-bold text-purple-600">{semrushData.intent?.join(', ') || 'N/A'}</div>
+                  <div className="text-sm text-gray-600">Search Intent</div>
+                </div>
+              </div>
+
+              {semrushData.global_volume_data && semrushData.global_volume_data.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">Global Search Volume</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {semrushData.global_volume_data.map((countryData, index) => (
+                      <div key={index} className="bg-gray-50 p-3 rounded-lg text-center">
+                        <div className="text-lg font-bold text-gray-800">{countryData.search_volume?.toLocaleString() || 'N/A'}</div>
+                        <div className="text-xs text-gray-600 uppercase">{countryData.country}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
           {analysisData[activeTab] && (
             <div className="space-y-6">
               <div className="flex justify-between items-start">
@@ -737,74 +806,100 @@ export default function AnalysisView({ selectedResults, keyword, onBack }: Analy
               </div>
 
               {analysisData[activeTab].status === 'success' && (
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">Metadata</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="font-medium">Description:</span>
-                        <p className="text-gray-600">{analysisData[activeTab].metadata.description || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <span className="font-medium">Keywords:</span>
-                        <p className="text-gray-600">{analysisData[activeTab].metadata.keywords || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">H1 Tags ({analysisData[activeTab].metadata.h1Tags.length})</h4>
-                    <div className="space-y-1">
-                      {analysisData[activeTab].metadata.h1Tags.map((h1, index) => (
-                        <div key={index} className="text-sm p-2 bg-white rounded border">
-                          {h1}
+                <>
+                  <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
+                    
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <h5 className="font-medium text-blue-900 mb-2">Keyword Statistics</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-blue-600">{analysisData[activeTab].keywordAnalysis.count}</div>
+                          <div className="text-gray-600">Total Occurrences</div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">Keyword Analysis</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Keyword:</span>
-                        <span className="font-medium">{analysisData[activeTab].keywordAnalysis.keyword}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Count:</span>
-                        <span className="font-medium">{analysisData[activeTab].keywordAnalysis.count}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Density:</span>
-                        <span className="font-medium">{analysisData[activeTab].keywordAnalysis.density.toFixed(2)}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Total Words:</span>
-                        <span className="font-medium">{analysisData[activeTab].keywordAnalysis.totalWords}</span>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-green-600">{analysisData[activeTab].keywordAnalysis.density.toFixed(2)}%</div>
+                          <div className="text-gray-600">Keyword Density</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-purple-600">{analysisData[activeTab].keywordAnalysis.totalWords}</div>
+                          <div className="text-gray-600">Total Words</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-orange-600">{analysisData[activeTab].keywordAnalysis.keyword}</div>
+                          <div className="text-gray-600">Target Keyword</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-semibold mb-2">Schema Markup ({analysisData[activeTab].schema.length})</h4>
-                    <div className="space-y-1">
-                      {analysisData[activeTab].schema.length > 0 ? (
-                        analysisData[activeTab].schema.map((schema, index) => (
-                          <div key={index} className="text-sm p-2 bg-white rounded border">
-                            {schema['@type'] || 'Unknown Schema'}
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2">Metadata</h4>
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <span className="font-medium">Description:</span>
+                            <p className="text-gray-600">{analysisData[activeTab].metadata.description || 'N/A'}</p>
                           </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-600 text-sm">No schema markup found</p>
-                      )}
+                          <div>
+                            <span className="font-medium">Keywords:</span>
+                            <p className="text-gray-600">{analysisData[activeTab].metadata.keywords || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2">H1 Tags ({analysisData[activeTab].metadata.h1Tags.length})</h4>
+                        <div className="space-y-1">
+                          {analysisData[activeTab].metadata.h1Tags.map((h1, index) => (
+                            <div key={index} className="text-sm p-2 bg-white rounded border">
+                              {h1}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2">Keyword Analysis</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span>Keyword:</span>
+                            <span className="font-medium">{analysisData[activeTab].keywordAnalysis.keyword}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Count:</span>
+                            <span className="font-medium">{analysisData[activeTab].keywordAnalysis.count}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Density:</span>
+                            <span className="font-medium">{analysisData[activeTab].keywordAnalysis.density.toFixed(2)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Total Words:</span>
+                            <span className="font-medium">{analysisData[activeTab].keywordAnalysis.totalWords}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-semibold mb-2">Schema Markup ({analysisData[activeTab].schema.length})</h4>
+                        <div className="space-y-1">
+                          {analysisData[activeTab].schema.length > 0 ? (
+                            analysisData[activeTab].schema.map((schema, index) => (
+                              <div key={index} className="text-sm p-2 bg-white rounded border">
+                                {schema['@type'] || 'Unknown Schema'}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-gray-600 text-sm">No schema markup found</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
               )}
 
               {analysisData[activeTab].status === 'pending' && (

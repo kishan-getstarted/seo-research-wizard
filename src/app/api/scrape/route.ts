@@ -71,7 +71,7 @@ async function scrapeWithRetry(url: string, maxRetries: number = 3): Promise<str
       // Enhanced stealth setup
       await page.evaluateOnNewDocument(() => {
         // Remove webdriver property
-        delete (window as any).webdriver;
+        delete (window as unknown as { webdriver?: boolean }).webdriver;
         
         // Override navigator properties
         Object.defineProperty(navigator, 'webdriver', {
@@ -96,9 +96,16 @@ async function scrapeWithRetry(url: string, maxRetries: number = 3): Promise<str
         
         // Override permissions
         const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters: any) => (
-          parameters.name === 'notifications' 
-            ? Promise.resolve({ state: Notification.permission as any })
+        window.navigator.permissions.query = (parameters: PermissionDescriptor) => (
+          parameters.name === 'notifications'
+            ? Promise.resolve({
+                state: Notification.permission,
+                name: 'notifications',
+                onchange: null,
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false
+              } as PermissionStatus)
             : originalQuery(parameters)
         );
       });
@@ -232,11 +239,80 @@ export async function POST(request: NextRequest) {
       card: $('meta[name="twitter:card"]').attr('content') || ''
     };
 
-    // Generate highlighted content
-    let highlightedContent = $('body').html() || '';
-    if (keyword) {
-      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-      highlightedContent = highlightedContent.replace(regex, '<mark style="background-color: yellow; padding: 2px 4px; border-radius: 3px;">$&</mark>');
+    // Generate highlighted content with better HTML processing
+    let highlightedContent = '';
+    
+    // Extract main content areas in order of preference
+    const contentSelectors = [
+      'main',
+      'article', 
+      '.content',
+      '.main-content',
+      '.post-content',
+      '.entry-content',
+      '.article-content',
+      '#content',
+      '#main',
+      'body'
+    ];
+    
+    let contentElement = null;
+    for (const selector of contentSelectors) {
+      contentElement = $(selector).first();
+      if (contentElement.length > 0 && contentElement.text().trim().length > 100) {
+        break;
+      }
+    }
+    
+    if (contentElement && contentElement.length > 0) {
+      // Remove unwanted elements
+      contentElement.find('script, style, nav, header, footer, aside, .sidebar, .menu, .navigation, .ads, .advertisement, .social-share, .comments, .related-posts').remove();
+      
+      // Clean up the content
+      highlightedContent = contentElement.html() || '';
+      
+      // Apply keyword highlighting if keyword is provided
+      if (keyword) {
+        // Function to highlight text nodes only, preserving HTML structure
+        const highlightInTextNodes = (html: string, keyword: string) => {
+          const $ = cheerio.load(`<div>${html}</div>`);
+          const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+          
+          function processTextNodes(element: cheerio.Cheerio) {
+            element.contents().each((_, node) => {
+              if (node.type === 'text') {
+                const text = $(node).text();
+                const highlightedText = text.replace(regex, '<span class="keyword-highlight">$&</span>');
+                if (highlightedText !== text) {
+                  $(node).replaceWith(highlightedText);
+                }
+              } else if (node.type === 'tag') {
+                processTextNodes($(node));
+              }
+            });
+          }
+          
+          processTextNodes($('div').first());
+          return $('div').first().html() || '';
+        };
+        
+        highlightedContent = highlightInTextNodes(highlightedContent, keyword);
+      }
+      
+      // Clean up and format HTML
+      highlightedContent = highlightedContent
+        .replace(/\s+/g, ' ')
+        .replace(/>\s+</g, '><')
+        .trim();
+    }
+    
+    // Fallback to body content if no main content found
+    if (!highlightedContent) {
+      highlightedContent = $('body').html() || '';
+      if (keyword) {
+        const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+        highlightedContent = highlightedContent.replace(regex, '<span class="keyword-highlight">$&</span>');
+      }
     }
 
     return NextResponse.json({
