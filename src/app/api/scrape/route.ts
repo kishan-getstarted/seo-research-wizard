@@ -239,79 +239,65 @@ export async function POST(request: NextRequest) {
       card: $('meta[name="twitter:card"]').attr('content') || ''
     };
 
-    // Generate highlighted content with better HTML processing
-    let highlightedContent = '';
-    
-    // Extract main content areas in order of preference
-    const contentSelectors = [
-      'main',
-      'article', 
-      '.content',
-      '.main-content',
-      '.post-content',
-      '.entry-content',
-      '.article-content',
-      '#content',
-      '#main',
-      'body'
-    ];
-    
-    let contentElement = null;
-    for (const selector of contentSelectors) {
-      contentElement = $(selector).first();
-      if (contentElement.length > 0 && contentElement.text().trim().length > 100) {
-        break;
-      }
-    }
-    
-    if (contentElement && contentElement.length > 0) {
-      // Remove unwanted elements
-      contentElement.find('script, style, nav, header, footer, aside, .sidebar, .menu, .navigation, .ads, .advertisement, .social-share, .comments, .related-posts').remove();
+    // Add keyword highlighting to the HTML content
+    let highlightedContent = content;
+    if (keyword) {
+      // Create a regex to match the keyword (case-insensitive, whole words)
+      const keywordRegex = new RegExp(`\\b(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
       
-      // Clean up the content
-      highlightedContent = contentElement.html() || '';
-      
-      // Apply keyword highlighting if keyword is provided
-      if (keyword) {
-        // Function to highlight text nodes only, preserving HTML structure
-        const highlightInTextNodes = (html: string, keyword: string) => {
-          const $ = cheerio.load(`<div>${html}</div>`);
-          const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-          
-          function processTextNodes(element: cheerio.Cheerio) {
-            element.contents().each((_, node) => {
-              if (node.type === 'text') {
-                const text = $(node).text();
-                const highlightedText = text.replace(regex, '<span class="keyword-highlight">$&</span>');
-                if (highlightedText !== text) {
-                  $(node).replaceWith(highlightedText);
-                }
-              } else if (node.type === 'tag') {
-                processTextNodes($(node));
-              }
-            });
+      // Add CSS for highlighting if not already present
+      const highlightCSS = `
+        <style>
+          .keyword-highlight {
+            background-color: #ffeb3b !important;
+            color: #000 !important;
+            padding: 1px 2px !important;
+            border-radius: 2px !important;
+            font-weight: bold !important;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1) !important;
           }
-          
-          processTextNodes($('div').first());
-          return $('div').first().html() || '';
-        };
-        
-        highlightedContent = highlightInTextNodes(highlightedContent, keyword);
-      }
+        </style>
+      `;
       
-      // Clean up and format HTML
-      highlightedContent = highlightedContent
-        .replace(/\s+/g, ' ')
-        .replace(/>\s+</g, '><')
-        .trim();
-    }
-    
-    // Fallback to body content if no main content found
-    if (!highlightedContent) {
-      highlightedContent = $('body').html() || '';
-      if (keyword) {
-        const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-        highlightedContent = highlightedContent.replace(regex, '<span class="keyword-highlight">$&</span>');
+      // Function to highlight text nodes only, preserving HTML structure
+      const highlightInHTML = (htmlContent: string) => {
+        // Load the HTML into cheerio for safe manipulation
+        const $ = cheerio.load(htmlContent);
+        
+        // Function to recursively process text nodes
+        function processTextNodes(element: cheerio.Cheerio) {
+          element.contents().each((_, node) => {
+            if (node.type === 'text') {
+              const text = $(node).text();
+              if (keywordRegex.test(text)) {
+                const highlightedText = text.replace(keywordRegex, '<span class="keyword-highlight">$1</span>');
+                $(node).replaceWith(highlightedText);
+              }
+            } else if (node.type === 'tag' && node.name !== 'script' && node.name !== 'style') {
+              // Skip script and style tags to avoid breaking functionality
+              processTextNodes($(node));
+            }
+          });
+        }
+        
+        // Process the body content
+        processTextNodes($('body'));
+        
+        // Add CSS to head if not already present
+        if (!$('head').find('style').text().includes('keyword-highlight')) {
+          $('head').append(highlightCSS);
+        }
+        
+        return $.html();
+      };
+      
+      try {
+        highlightedContent = highlightInHTML(content);
+        console.log("🚀 ~ POST ~ highlightedContent:", highlightedContent)
+      } catch (error) {
+        console.error('Error highlighting keywords:', error);
+        // Fallback to original content if highlighting fails
+        highlightedContent = content;
       }
     }
 
@@ -333,7 +319,7 @@ export async function POST(request: NextRequest) {
         density: keywordDensity,
         totalWords
       },
-      highlightedContent: highlightedContent.substring(0, 50000) // Limit content size
+      highlightedContent: highlightedContent  // Full HTML document with keyword highlighting
     });
 
   } catch (error) {

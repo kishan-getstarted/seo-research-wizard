@@ -12,7 +12,9 @@ import {
   Code,
   Edit3,
   Plus,
-  X
+  X,
+  Globe,
+  RefreshCw
 } from 'lucide-react';
 
 interface SearchResult {
@@ -716,7 +718,7 @@ export default function AnalysisView({ selectedResults, keyword, onBack, semrush
             <div className="space-y-6">
               <div>
                 <h3 className="text-xl font-semibold mb-2">SEMrush Keyword Analysis</h3>
-                <p className="text-gray-600 mb-4">Keyword: &quot;{semrushData.keyword}&quot; in {semrushData.country.toUpperCase()}</p>
+                <p className="text-gray-600 mb-4">Keyword: &quot;{semrushData.keyword}&quot; in {semrushData?.country?.toUpperCase()}</p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -807,9 +809,56 @@ export default function AnalysisView({ selectedResults, keyword, onBack, semrush
 
               {analysisData[activeTab].status === 'success' && (
                 <>
+                  {/* Webpage Preview Section - FIRST */}
+                  <div className="bg-white rounded-lg shadow-sm border mb-6">
+                    {/* Chrome Tab Header */}
+                    <div className="bg-gray-100 border-b rounded-t-lg">
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <div className="flex items-center gap-3">
+                          <div className="flex gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                          </div>
+                          <div className="text-sm font-medium text-gray-700 truncate">
+                            {analysisData[activeTab].title}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => retryAnalysis(activeTab)}
+                          className="p-1 hover:bg-gray-200 rounded"
+                          title="Refresh Page"
+                        >
+                          <RefreshCw className="h-4 w-4 text-gray-600" />
+                        </button>
+                      </div>
+                      
+                      {/* Chrome Address Bar */}
+                      <div className="px-4 pb-3">
+                        <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1 border border-gray-300">
+                          <Globe className="h-4 w-4 text-gray-500" />
+                          <div className="flex-1 text-sm text-gray-600 truncate">
+                            {analysisData[activeTab].url}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Webpage Content */}
+                    <div className="bg-white">
+                      <iframe
+                        srcDoc={analysisData[activeTab].highlightedContent}
+                        className="w-full h-96 border-0"
+                        title={`Preview of ${analysisData[activeTab].title}`}
+                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                        style={{ backgroundColor: 'white' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Keyword Statistics */}
                   <div className="bg-white p-4 rounded-lg shadow-sm border mb-6">
-                    
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <div className="p-3 bg-blue-50 rounded-lg">
                       <h5 className="font-medium text-blue-900 mb-2">Keyword Statistics</h5>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div className="text-center">
@@ -899,6 +948,7 @@ export default function AnalysisView({ selectedResults, keyword, onBack, semrush
                       </div>
                     </div>
                   </div>
+
                 </>
               )}
 
